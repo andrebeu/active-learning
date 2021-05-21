@@ -8,11 +8,13 @@ Exp = namedtuple('Experience',[
     'tstep','state','action','reward','state_tp1','rnn_state'
     ],defaults=[None]*6)
 
+""" 
+WM tasks are POMDP environments in which state(t+1) do not depend on action
+implication: unlike traditional RL, environment and agent can be disentangled 
+"""
+
 class PWMTask():
-    """ 
-    WM tasks are POMDP environments
-    transitions do not depend on action
-    """
+    
     
     def __init__(self,stim_set):
         self.stim_set = stim_set
@@ -33,30 +35,34 @@ class PWMTask():
     def step(self):
         None
 
-    def play_trial(self,pifn=None):
+    def sample_trial(self):
         """ 
         distinguishing state from observation becasue POMDP
             R/L response depends on comparison between 
             first and last obs
-        """
-        self.reset_trial()
-        if type(pifn)==type(None):
-            pifn = self.randpi_fn
-        # sample stimuli for trial
-        SAi,SBi = self.stim_set[np.random.choice(len(self.stim_set))]
-        SA,SB = SAi,SBi # int coding
-        delay = 2
-        trial_obs = np.zeros(delay+2) # two stim
-        trial_obs[0] = SA
-        trial_obs[-1] = SB
-        """ trial_st
+        trial_st
         instructs rewarded action 
         0 is hold, 1 is 1, 2 is R
         reward hold everywhere except 
         after second stimulus
         """
-        trial_st = np.zeros(delay+2)
+        self.reset_trial()
+        SAi,SBi = self.stim_set[np.random.choice(len(self.stim_set))]
+        SA,SB = SAi,SBi # int coding
+        delay = 2
+        trial_obs = np.zeros(delay+3) # two stim + final delay
+        trial_obs[0] = SA
+        trial_obs[-2] = SB
+        trial_st = np.zeros(delay+3)
         trial_st[-1] = 1+int(SA>SB) 
+        return trial_st,trial_obs
+
+    def play_trial(self,pifn=None):
+        """ deprecated. leaving for now
+        """
+        if type(pifn)==type(None):
+            pifn = self.randpi_fn
+        trial_st,trial_obs = self.sample_trial()
         expL = []
         for tstep,(st,ot) in enumerate(zip(trial_st,trial_obs)):
             at = pifn(ot)
@@ -72,7 +78,10 @@ class PWMTask():
     
     
 
-
+""" 
+TODO: restructure learning target setup to allow 
+TD lambda continuum between onestep TD and MC 
+"""
 
 class ActorCritic(tr.nn.Module):
   
@@ -101,6 +110,17 @@ class ActorCritic(tr.nn.Module):
         )
         return None
 
+    def unroll_trial(self,trial):
+        """ 
+        trial is tuple (states,observations)
+        """
+        trial_st,trial_obs = trial
+        for tstep in range(len(trial_st)):
+            st,ot = trial_st[tstep],trial_obs[tstep]
+            at = self.act(ot)
+        return None
+
+
     def unroll_ep(self,task):
         """ actor logic 
         """
@@ -115,7 +135,7 @@ class ActorCritic(tr.nn.Module):
             vh_t = self.rnn2val(h_t)
             pih_t = self.rnn2pi(h_t) 
             action = self.act(pih_t)
-            exp = Experience('tstep',obs[0],action,r_t,obs[0]+1,h_t)
+            exp = Exp('tstep',obs[0],action,r_t,obs[0]+1,h_t)
             EpBuff.append(exp)
         return EpBuff
 
