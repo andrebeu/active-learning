@@ -161,16 +161,18 @@ class ActorCritic(tr.nn.Module):
         given sequence of stimuli, unrolls rnn
          returns hidden state
         efficient: useful when applying output layer
-         in paralelle
+         in paralell
         """
 
         return None
 
 
     def update(self,expD):
-        """ REINFORCE and A2C updates
-        given expD trajectory:
+        """ 
+        supported REINFORCE and A2C updates
+        batch update given expD trajectory:
         expD = {'reward':[tsteps],'state':[tsteps],...}
+        compute output layers within (i.e. expects output of rnn unroll)
         """
         # unpack experience
         rnn_states = tr.cat([*expD['rnn_state']])
