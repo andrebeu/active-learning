@@ -1,7 +1,19 @@
-# toy simulation 
-- add task description
-- add simulation description
-- add goal state
+Question: does curriculum delay help learning?
+Target: find conditions: pretraining on partial task helps
+exp1: does PWM3 train faster than PWM6? parametric delay 1-6
+
+# experiment: PWM 3vs6
+
+PWM task: 
+  - two stimuli (SA,SB)
+  - delay of 3 vs 6 steps
+Agents:
+  - DQN
+  - AC (one step to MC)
+Goal:
+  - 
+
+# experiment: stimulus similarity
 
 # working notes
 
