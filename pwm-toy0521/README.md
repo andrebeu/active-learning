@@ -8,9 +8,11 @@ Exp1: does PWM3 train faster than PWM6? parametric delay 1-6
 PWM task: 
   * two stimuli (SA,SB)
   * delay of 3 vs 6 steps
+
 Agents:
   * DQN
   * AC (one step to MC)
+  
 Goal:
   * 
 
