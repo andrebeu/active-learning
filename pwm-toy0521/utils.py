@@ -43,12 +43,7 @@ class Env():
 
 
 """ 
-WM tasks are POMDP environments in which state(t+1) do not depend on action
-implication: unlike traditional RL, environment and agent can be disentangled 
 
-distinguishing state from observation becasue POMDP
-    R/L response depends on comparison between 
-    first and last obs
 """
 
 class PWMTask():
@@ -89,21 +84,26 @@ class PWMTask():
         return rt
 
     
-""" 
-implementation NOTEs: 
-
-two modes:
- rnn_step can be used online
-  RNN state held as instance variable
- while rnn_unroll is more efficient
-  returns states for every obs in sequence
 
 
-TODO: restructure learning target setup to allow 
-TD lambda continuum between onestep TD and MC 
-"""
+# class Agent(tr.nn.Module):
+# class DQN(Agent):
+# class AC(Agent):
 
 class ActorCritic(tr.nn.Module):
+    """ implementation NOTEs: 
+
+    Two modes:
+     rnn_step can be used online
+      RNN state held as instance variable
+     while rnn_unroll is more efficient
+      returns states for every obs in sequence
+
+    TODO: 
+     - restructure learning target setup to allow 
+     TD lambda continuum between onestep TD and MC 
+
+    """
   
     def __init__(self,indim=1,nactions=3,stsize=15,gamma=0.80,learnrate=0.005,TDupdate=False):
         super().__init__()
