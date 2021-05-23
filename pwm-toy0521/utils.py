@@ -4,50 +4,61 @@ from collections import namedtuple
 from torch.distributions.categorical import Categorical
 
 
-Exp = namedtuple('Experience',[
-    'state','obs','action','reward',
-    'obs_tp1','rnn_state'
-    ], defaults=[None]*2)
-
-
-
-class Env():
-    def __init__(self):
-        None
-    
-    def play_trial(self,agentpi,task):
-        """ 
-        action <- agentpi(state)
-        task methods: sample_trial, reward_fn 
-        """
-        trial_st,trial_obs = task.sample_trial()
-        expL = []
-        final_state = False
-        for tstep in range(len(trial_st)):
-            if tstep == len(trial_st)-1:
-                final_state = True
-            ## play
-            st = trial_st[tstep]
-            ot = trial_obs[tstep]
-            at = agentpi(ot)
-            rt = task.reward_fn(st,at)
-            # final state
-            if final_state:
-                otp = -1
-            else:
-                otp = trial_st[tstep+1]
-            # record
-            expt = Exp(st,ot,at,rt,otp)
-            expL.append(expt)
-        return expL
-
-
-""" 
-
+""" next steps
+- left a bunch of asserts that need to be verified
+- fix agent.update, being called in env.run_pwm_trial
 """
 
-class PWMTask():
+
+# variable delay trial
+class Env():
+    def __init__(self,actor,task):
+        self.actor = actor
+        self.task = task
+        return None
+
+    def reward_fn(self,stateL,obsL,actionL):
+        """ reward_hold_and_lastaction
+        state number indicates rewarded action
+        reward hold everywhere except 
+         after second stimulus
+        """
+        trlen = len(stateL)
+        reward = -np.ones(trlen)
+        reward_hold = (actionL[:-1] == 0)
+        reward_action = int(stateL[-1] == actionL[-1])
+        reward = np.concatenate([reward_hold,reward_action])
+        print('s',stateL,'a',actionL,'r',reward)
+        assert False
+        return rt
+
+
+    def run_pwm_trial(self,delay,update=True):
+        """ 
+        sample trial
+        perform model update
+
+        """
+        stateL,obsL = self.task.sample_trial(delay+2)
+        pi_distr,vhatA = self.actor.unroll_trial(stateL)
+        actionL = pi_distr.sample()
+        assert len(actionL)==len(obsL)
+        rewardL = self.reward_fn(stateL,actionL)
+        if update:
+            self.actor.update()
+        trial_data = {
+            'states':stateL,
+            'obss':obsL,
+            'actions':actionL,
+            'rewards':rewardL,
+        }
+        return trial_data
     
+    
+
+
+
+class PWMTask():
     
     def __init__(self,stim_set,delay):
         """ action space {0:hold,1:left,2:right}
@@ -57,33 +68,28 @@ class PWMTask():
         self.action_set = [0,1,2]
         return None
 
-    def sample_trial(self):
-        """ 
+    def sample_trial(self,trtype,trlen):
+        stateL,obsL = self.sample_state_and_obs(trlen)
+        actionL = unroll_agent(stateL)
+        return stateL,obsL,rewardL
+
+    def sample_trial(self,trlen):
+        """ returns two arrays of `trlen`
+        - action_t = actors(obs)
+        - reward_t = reward_fn(state,action)
         """
+        delay = trlen-2
+        assert delay>0 # 2 stim
         SAi,SBi = self.stim_set[np.random.choice(len(self.stim_set))]
         # embed stim
         SA,SB = SAi,SBi 
-        trial_obs = np.zeros(self.delay+2) # two stim
-        trial_obs[0] = SA
-        trial_obs[-1] = SB
-        # rewarded action 
-        trial_st = np.zeros(self.delay+2)
-        trial_st[-1] = 1+int(SA>SB) 
-        return trial_st,trial_obs
-
-    def reward_fn(self,st,at):
-        """ 
-        state number indicates rewarded action
-        reward hold everywhere except 
-         after second stimulus
-        """
-        if st == at:
-            rt = 1
-        else:
-            rt = 0
-        return rt
-
-    
+        obsL = np.zeros(trlen) # two stim
+        obsL[0] = SA
+        obsL[-1] = SB
+        # instructs rewarded action 
+        stateL = np.zeros(trlen)
+        stateL[-1] = 1+int(SA>SB) 
+        return stateL,obsL
 
 
 # class Agent(tr.nn.Module):
@@ -120,7 +126,8 @@ class ActorCritic(tr.nn.Module):
         """ concat input [s_tm1,a_tm1,r_tm1]
         """
         # policy parameters
-        self.rnn = tr.nn.LSTMCell(self.indim,self.stsize,bias=True)
+        # self.rnncell = tr.nn.LSTMCell(self.indim,self.stsize,bias=True)
+        self.rnn = tr.nn.LSTM(self.indim,self.stsize,bias=True)
         self.rnn_st0 = tr.nn.Parameter(tr.rand(2,1,self.stsize),requires_grad=True)
         self.rnn2val = tr.nn.Linear(self.stsize,1,bias=True)
         self.rnn2pi = tr.nn.Linear(self.stsize,self.nactions,bias=True)
@@ -158,20 +165,46 @@ class ActorCritic(tr.nn.Module):
 
     def rnn_unroll(self,obsL):
         """ 
-        given sequence of stimuli, unrolls rnn
-         returns hidden state
-        efficient: useful when applying output layer
-         in paralell
+        
         """
 
         return None
 
+    def unroll_trial(self,obsL):
+        """
+        given sequence of stimuli, unrolls rnn
+         returns actions and hidden states
+        efficient: forward layers applied in parallel
+         """
+        # propo rnn and forward pass head layers
+        rnn_out,h_n = self.rnn(obsL)
+        assert len(h_n) == 1
+        assert len(rnn_out) == len(obsL)
+        vhatA = self.rnn2val(rnn_out)
+        piact = self.rnn2pi(rnn_out)
+        pism = piact.softmax(-1) 
+        # probability of each action each timestep
+        # batch dim might be included
+        assert pism.shape == (len(obsL),self.nactions)
+        """
+        distribution constructor 
+         takes probabilities of each category
+        returns distribution object
+        distr.log_prob required 
+        """
+        pi_distr = Categorical(pism)
+        assert False
+        return pi_distr,vhatA
+
+    def update_trial(self,obsL,rewardL):
+        """ performs update on single trial """
+        return None
 
     def update(self,expD):
         """ 
         supported REINFORCE and A2C updates
-        batch update given expD trajectory:
-        expD = {'reward':[tsteps],'state':[tsteps],...}
+         batch update given expD trajectory:
+        expects expD = {'reward':[tsteps],'state':[tsteps],...}
         compute output layers within (i.e. expects output of rnn unroll)
         """
         # unpack experience
@@ -188,6 +221,10 @@ class ActorCritic(tr.nn.Module):
         else: # REINFORCE
             delta = tr.Tensor(returns) - vhat.squeeze()
         # form RL loss
+        actionL = pi_distr.sample()
+        assert len(actionL) == len(obsL)
+        logprob_actions = pi_distr.log_prob(actionL)
+
         pi = pact.softmax(-1)
         distr = Categorical(pi)
         los_pi = tr.mean(delta*distr.log_prob(actions))
@@ -202,15 +239,7 @@ class ActorCritic(tr.nn.Module):
 
     ### 
 
-    def unroll_trial(self,trial):
-        """ 
-        trial is tuple (states,observations)
-        """
-        trial_st,trial_obs = trial
-        for tstep in range(len(trial_st)):
-            st,ot = trial_st[tstep],trial_obs[tstep]
-            at = self.act(ot)
-        return None
+
 
     def unroll_ep(self,task):
         """ actor logic 
@@ -259,6 +288,18 @@ def compute_returns(rewards,gamma=1.0):
   ])
   return returns
 
+
+# EXP and unpackexpL might not be needed
+""" 
+i dont forsee using exp buffer
+output of trial unrolls are DoL already
+"""
+Exp = namedtuple('Experience',[
+    'state','obs','action','reward',
+    'obs_tp1','rnn_state'
+    ], defaults=[None]*2)
+
+
 def unpack_expL(expLoD):
   """ 
   given list of experience (namedtups)
@@ -269,3 +310,29 @@ def unpack_expL(expLoD):
   expDoL = Exp(*zip(*expLoD))._asdict()
   return {k:np.array(v) for k,v in expDoL.items()}
 
+
+def play_trial_unroll(self,agentpi,task):
+    """ deprecated
+    action <- agentpi(state)
+    task methods: sample_trial, reward_fn 
+    """
+    trial_st,trial_obs = task.sample_trial()
+    expL = []
+    final_state = False
+    for tstep in range(len(trial_st)):
+        if tstep == len(trial_st)-1:
+            final_state = True
+        ## play
+        st = trial_st[tstep]
+        ot = trial_obs[tstep]
+        at = agentpi(ot)
+        rt = task.reward_fn(st,at)
+        # final state
+        if final_state:
+            otp = -1
+        else:
+            otp = trial_st[tstep+1]
+        # record
+        expt = Exp(st,ot,at,rt,otp)
+        expL.append(expt)
+    return expL
