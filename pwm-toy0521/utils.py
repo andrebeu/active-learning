@@ -274,11 +274,6 @@ def compute_returns(rewards,gamma=1.0):
 i dont forsee using exp buffer
 output of trial unrolls are DoL already
 """
-Exp = namedtuple('Experience',[
-    'state','obs','action','reward',
-    'obs_tp1','rnn_state'
-    ], defaults=[None]*2)
-
 
 
 if __name__ == "__main__":
