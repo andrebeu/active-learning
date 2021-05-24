@@ -19,20 +19,29 @@ class Env():
         self.task = task
         return None
 
-    def reward_fn(self,stateL,obsL,actionL):
+    def reward_hold_and_lastaction(self,stateL,obsL,actionL):
         """ reward_hold_and_lastaction
         state number indicates rewarded action
         reward hold everywhere except 
          after second stimulus
         """
-        trlen = len(stateL)
-        reward = -np.ones(trlen)
         reward_hold = np.equal(actionL[:-1],np.zeros_like(actionL[:-1]))
         reward_action = int(stateL[-1] == actionL[-1])
         assert BATCHSIZE == 1, 'squeezing batchsize'
         reward = np.concatenate([reward_hold.squeeze(),[reward_action]])
         assert reward.shape == stateL.shape
         return reward
+
+    def reward_action_punish_nohold(self,stateL,obsL,actionL):
+        punish_hold = -np.not_equal(actionL[:-1],np.zeros_like(actionL[:-1]))
+        reward_action = int(stateL[-1] == actionL[-1])
+        assert BATCHSIZE == 1, 'squeezing batchsize'
+        reward = np.concatenate([reward_hold.squeeze(),[reward_action]])
+        assert reward.shape == stateL.shape
+        return reward 
+
+    def reward_fn(self,stateL,obsL,actionL):
+        return self.reward_hold_and_lastaction(stateL,obsL,actionL)
 
     def run_pwm_trial(self,delay,update=True):
         """ 
@@ -108,7 +117,7 @@ class ActorCritic(tr.nn.Module):
 
     """
   
-    def __init__(self,indim=2,nactions=3,stsize=19,gamma=0.80,learnrate=0.005,TDupdate=False):
+    def __init__(self,indim=2,nactions=3,stsize=24,gamma=1.0,learnrate=0.005,TDupdate=False):
         super().__init__()
         self.indim = indim
         self.stsize = stsize
@@ -144,8 +153,8 @@ class ActorCritic(tr.nn.Module):
          returns actions and hidden states
         efficient: forward layers applied in parallel
          """
+        assert BATCHSIZE==1,'sqeueze batchdim'
         obsA = tr.Tensor(obsA).unsqueeze(1) # batchdim
-        print(obsA.shape)
         # propo rnn and forward pass head layers
         rnn_out,h_n = self.rnn(obsA)
         assert len(h_n) == 2,len(h_n)
@@ -184,7 +193,7 @@ class ActorCritic(tr.nn.Module):
         los_pi = tr.mean(delta*distr.log_prob(actions))
         ent_pi = distr.entropy().mean() # mean over time
         los_val = tr.mean(tr.square(returns - vhats)) # MSE
-        los = 0.1*los_val-los_pi+0.1*ent_pi
+        los = 0.1*los_val-los_pi
         # update step
         self.optiop.zero_grad()
         los.backward()
@@ -221,4 +230,4 @@ if __name__ == "__main__":
     ## perform single update
     env = Env(actor,task)
     data = env.run_pwm_trial(delay=2,update=True)
-    ## task
+    
