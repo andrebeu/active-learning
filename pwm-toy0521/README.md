@@ -1,11 +1,12 @@
-- Question: does curriculum delay help learning?
-- Target: find conditions: pretraining on partial task helps
+# Question: does curriculum delay help learning?
+# Target: find conditions: pretraining on partial task helps
 
 
-# experiment: PWM 3vs6
+## experiment: growing delay
 
 Exp1: does PWM3 train faster than PWM6? 
 Exp2: parametric delay 1-6
+Exp3: pretraining on shorter delays help longer delay train time?
 
 PWM task: 
   * two stimuli (SA,SB)
@@ -16,12 +17,12 @@ Agents:
   * AC (one step to MC)
 
 
-# experiment: stimulus similarity
+## experiment: stimulus similarity
 
 goal: simulate easy vs difficult trial
  * show acc rises faster for easy when trained on both concurrently
 
-# note POMDP
+## note POMDP
 
 * WM tasks are POMDP environments in which state(t+1) do not depend on action
 * implication: unlike traditional RL, environment and agent can be disentangled 
@@ -29,7 +30,7 @@ goal: simulate easy vs difficult trial
 
 # working notes
 
-## note on batching: currently 'online' mode, i.e. batchsize = 1 
+## note on batching: currently 'online' mode, i.e. batchsize = 1 (05/24)
 - should we use batched training, or should each epoch consist of a single trial?
   - online mode is more cognitively plausible / defensible. 
   - but online mode is less efficient

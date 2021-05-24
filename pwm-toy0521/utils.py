@@ -66,7 +66,7 @@ class PWMTask():
     def __init__(self,stim_set,stimdim=2):
         """ 
         action space {0:hold,1:left,2:right}
-        stim_set is list of tuples (Sa,Sb)
+        stim_set is list of tuples [(Sa,Sb)]
         """
         self.stim_set = stim_set
         self.action_set = [0,1,2]
