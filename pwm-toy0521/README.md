@@ -29,6 +29,12 @@ goal: simulate easy vs difficult trial
 
 # working notes
 
+## note on batching: currently 'online' mode, i.e. batchsize = 1 
+- should we use batched training, or should each epoch consist of a single trial?
+  - online mode is more cognitively plausible / defensible. 
+  - but online mode is less efficient
+- since the first set of experiments are expected to be relatively low complexity, I am going with online. I left `assert batchsize=1` statements in places where changes would need to be made to accommodate batching.
+
 ## efficiency note: how to handle rnn unroll / env steps? (05/22)
 - RNN unrolls (required in agent.update) with steps in trial (usually happens in environment method)
 - online unrolls in environment method are more flexible
