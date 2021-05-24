@@ -280,42 +280,6 @@ Exp = namedtuple('Experience',[
     ], defaults=[None]*2)
 
 
-def unpack_expL(expLoD):
-  """ 
-  given list of experience (namedtups)
-      expLoD [{t,s,a,r,sp}_t]
-  return dict of np.arrs 
-      exp {s:[],a:[],r:[],sp:[]}
-  """
-  expDoL = Exp(*zip(*expLoD))._asdict()
-  return {k:np.array(v) for k,v in expDoL.items()}
-
-
-def play_trial_unroll(self,agentpi,task):
-    """ deprecated
-    action <- agentpi(state)
-    task methods: sample_trial, reward_fn 
-    """
-    trial_st,trial_obs = task.sample_trial()
-    expL = []
-    final_state = False
-    for tstep in range(len(trial_st)):
-        if tstep == len(trial_st)-1:
-            final_state = True
-        ## play
-        st = trial_st[tstep]
-        ot = trial_obs[tstep]
-        at = agentpi(ot)
-        rt = task.reward_fn(st,at)
-        # final state
-        if final_state:
-            otp = -1
-        else:
-            otp = trial_st[tstep+1]
-        # record
-        expt = Exp(st,ot,at,rt,otp)
-        expL.append(expt)
-    return expL
 
 if __name__ == "__main__":
     ## setup
