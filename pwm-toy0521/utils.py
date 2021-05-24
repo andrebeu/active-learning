@@ -20,10 +20,9 @@ class Env():
         return None
 
     def reward_hold_and_lastaction(self,stateL,obsL,actionL):
-        """ reward_hold_and_lastaction
-        state number indicates rewarded action
-        reward hold everywhere except 
-         after second stimulus
+        """
+        reward +1 hold 
+        reward +1 action
         """
         reward_hold = np.equal(actionL[:-1],np.zeros_like(actionL[:-1]))
         reward_action = int(stateL[-1] == actionL[-1])
@@ -33,10 +32,14 @@ class Env():
         return reward
 
     def reward_action_punish_nohold(self,stateL,obsL,actionL):
+        """ 
+        punish -1 nohold
+        reward +1 action
+        """
         punish_hold = -np.not_equal(actionL[:-1],np.zeros_like(actionL[:-1]))
         reward_action = int(stateL[-1] == actionL[-1])
         assert BATCHSIZE == 1, 'squeezing batchsize'
-        reward = np.concatenate([reward_hold.squeeze(),[reward_action]])
+        reward = np.concatenate([punish_hold.squeeze(),[reward_action]])
         assert reward.shape == stateL.shape
         return reward 
 
@@ -83,7 +86,9 @@ class PWMTask():
         return None
 
     def sample_trial(self,trlen):
-        """ returns stateL (trlen) and obsA (trlen,stimdim)
+        """ 
+        returns stateL (trlen) and obsA (trlen,stimdim)
+        state indicates rewarded action
         - action_t = actors(obs)
         - reward_t = reward_fn(state,action)
         """
