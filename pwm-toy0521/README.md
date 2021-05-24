@@ -22,6 +22,14 @@ Agents:
 goal: simulate easy vs difficult trial
  * show acc rises faster for easy when trained on both concurrently
 
+## reward structure note
+
+* should I reward hold or punish hold violation?
+* noticed that training hold on longer delays allows model to learn hold _faster_ than shorter delays, because more holding experience per episode. 
+  * hold reward could scale with number of steps 
+  * might need to be careful with equating batch sizes when comparing different delay conditions.
+
+
 ## note POMDP
 
 * WM tasks are POMDP environments in which state(t+1) do not depend on action

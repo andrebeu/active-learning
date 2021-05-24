@@ -43,6 +43,18 @@ class Env():
         assert reward.shape == stateL.shape
         return reward 
 
+    def reward_custom(self,stateL,obsL,actionL,holdR=1,actionR=1):
+        """ 
+        punish -1 nohold
+        reward +1 action
+        """
+        reward_hold = holdR*np.equal(actionL[:-1],np.zeros_like(actionL[:-1]))
+        reward_action = actionR*int(stateL[-1] == actionL[-1])
+        assert BATCHSIZE == 1, 'squeezing batchsize'
+        reward = np.concatenate([reward_hold.squeeze(),[reward_action]])
+        assert reward.shape == stateL.shape
+        return reward 
+
     def reward_fn(self,stateL,obsL,actionL):
         return self.reward_hold_and_lastaction(stateL,obsL,actionL)
 
