@@ -36,10 +36,9 @@ class Env():
 
     def run_pwm_trial(self,delay,update=True):
         """ 
-        sample trial
-        unroll agent
-        evaluate actions / compute rewards
-        perform model update
+        sample trial, unroll agent, compute rewards
+         perform model update
+        used for training and eval
         """
         stateL,obsA = self.task.sample_trial(delay+2)
         pi_distr,vhatA = self.actor.unroll_trial(obsA)
@@ -139,28 +138,6 @@ class ActorCritic(tr.nn.Module):
         self.h_t,self.c_t = self.rnn_st0
         return None
 
-    def act(self,obs):
-        """ 
-        pi_act [batch,nactions] is output of policy head
-        which gets passed through a softmax 
-        and from which an action is sampled
-        """
-        hstate = self.rnn_step(obs)
-        pi_act = self.rnn2pi(hstate_t)
-        pism = pi_act.softmax(-1)
-        pidistr = Categorical(pism)
-        action = pidistr.sample()
-        return action
-
-    def rnn_step(self,obs):
-        """ 
-        updates rnn state instance variable
-         flexible: used for online 
-        """
-        obs = tr.Tensor(obs).unsqueeze(0)
-        self.h_t,self.c_t = self.rnn(obs,(self.h_t,self.c_t))
-        return self.h_t
-
     def unroll_trial(self,obsA):
         """
         given sequence of stimuli, unrolls rnn
@@ -187,13 +164,9 @@ class ActorCritic(tr.nn.Module):
         pi_distr = Categorical(pism)
         return pi_distr,vhatA
 
-    def update_trial(self,obsL,rewardL):
-        """ performs update on single trial """
-        return None
-
     def update(self,expD):
         """ 
-        supported REINFORCE and A2C updates
+        supported REINFORCE and (broken) A2C updates 
         expects expD = {'state','obs','action','reward','pi','vhat'}
         """
         returns = tr.Tensor(compute_returns(expD['reward'],gamma=self.gamma) )
@@ -218,38 +191,6 @@ class ActorCritic(tr.nn.Module):
         self.optiop.step()
         return None 
 
-    ### 
-
-    def unroll_ep(self,task):
-        """ actor logic 
-        """
-        finalst = False
-        task.reset()
-        self.h_t,self.c_t = self.rnn_st0
-        EpBuff = []
-        action = np.random.binomial(1,0.5)
-        while not finalst:
-            obs,r_t,finalst = task.step(action)
-            h_t = self.rnn_step(obs)
-            vh_t = self.rnn2val(h_t)
-            pih_t = self.rnn2pi(h_t) 
-            action = self.act(pih_t)
-            exp = Exp('tstep',obs[0],action,r_t,obs[0]+1,h_t)
-            EpBuff.append(exp)
-        return EpBuff
-
-    def eval(self,expD):
-        """ """
-        data = {}
-        ## entropy
-        vhat,pact = self.forward(expD['state'])
-        pra = pact.softmax(-1)
-        entropy = -1 * tr.sum(pra*pra.log2(),-1).mean()
-        data['entropy'] = entropy.detach().numpy()
-        ## value
-        returns = compute_returns(expD['reward']) 
-        data['delta'] = np.mean(returns - vhat.detach().numpy())
-        return data
 
 
 
@@ -268,12 +209,6 @@ def compute_returns(rewards,gamma=1.0):
     ]) ## not sure how to parse this
     return returns
 
-
-# EXP and unpackexpL might not be needed
-""" 
-i dont forsee using exp buffer
-output of trial unrolls are DoL already
-"""
 
 
 if __name__ == "__main__":
