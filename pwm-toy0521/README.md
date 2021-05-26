@@ -10,6 +10,7 @@ Experiment setup:
 
 Result: Shorter delays train faster on selecting rewarded action
 - Not surprising, shorter term credit assignments are easier.
+
 ![exp-delay-result](tempfig.png)
 
 
