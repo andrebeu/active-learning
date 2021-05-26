@@ -8,7 +8,7 @@ Experiment setup:
 - reward +1 hold, +1 correct action, 0 otherwise
 - vary number of timesteps between first and second stimuli
 
-*Result: Shorter delays train faster on selecting rewarded action*
+**Result: Shorter delays train faster on selecting rewarded action**
 - Not surprising, shorter term credit assignments are easier.
 
 ![exp-delay-result](tempfig.png)
