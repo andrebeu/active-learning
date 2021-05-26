@@ -23,7 +23,7 @@ Does pretraining shorter delays improve training time?
   - no-curr: trained on delay 5
   - curr: pretrained 80% of trials on delay 1, final 20% of trials on delay 5
 
-** Result (main): training accuracy curr > no-curr **
+**Result (main): training accuracy curr > no-curr**
 
 ![exp-delay-result](delay-curriculum.png)
 

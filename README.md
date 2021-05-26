@@ -5,3 +5,4 @@ Whenever neuroscientists want to study the neural substrate of cognition, they f
 strategy: 
 * model rodent learning with deep RL nets 
 * use model to simulate different approaches to improving learning.
+
