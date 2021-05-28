@@ -3,10 +3,6 @@ import torch as tr
 from collections import namedtuple
 from torch.distributions.categorical import Categorical
 
-# refactor needed:
-# class Agent(tr.nn.Module):
-# class DQN(Agent):
-# class AC(Agent):
 
 
 BATCHSIZE = 1 # no batching, "online"
@@ -58,6 +54,7 @@ class Env():
     def reward_fn(self,stateL,obsL,actionL):
         return self.reward_hold_and_lastaction(stateL,obsL,actionL)
 
+    # used in delay 
     def run_pwm_trial(self,delay,update=True):
         """ 
         sample trial, unroll agent, compute rewards
@@ -83,21 +80,50 @@ class Env():
             self.actor.update(trial_data)
         return trial_data
     
-    
+    # used in stimvar
+    def run_pwm_trial2(self,update=True):
+        """ 
+        sample trial, unroll agent, compute rewards
+         perform model update
+        used for training and eval
+        """
+        stateL,obsA = self.task.sample_trial()
+        pi_distr,vhatA = self.actor.unroll_trial(obsA)
+        assert BATCHSIZE == 1, 'use .sample([b])'
+        actionL = pi_distr.sample()
+        rewardL = self.reward_fn(stateL,obsA,actionL)
+        assert len(actionL)==len(obsA)==len(rewardL)
+        # 
+        trial_data = {
+            'state':stateL,
+            'obs':obsA,
+            'action':actionL,
+            'reward':rewardL,
+            'vhat':vhatA,
+            'pi':pi_distr
+        }
+        if update:
+            self.actor.update(trial_data)
+        return trial_data
 
 class PWMTask():
     
-    def __init__(self,stim_set,stimdim=2):
+    def __init__(self,stim_set,stimdim=2,embed_stim='onehot',
+        stim_mean=None,stim_var=None):
         """ 
         action space {0:hold,1:left,2:right}
-        stim_set is list of tuples [(Sa,Sb)]
+        stim_set is list of int tuples [(Sa,Sb)]
         """
+        if embed_stim=='onehot':
+            self.embed_stim = self.embed_onehot
+        elif embed_stim=='gauss':
+            self.embed_stim = lambda X: self.embed_gauss(X,stim_mean,stim_var)
         self.stim_set = stim_set
         self.action_set = [0,1,2]
         self.stimdim = stimdim
         return None
 
-    def sample_trial(self,trlen):
+    def sample_trial(self,trlen=5):
         """ 
         returns stateL (trlen) and obsA (trlen,stimdim)
         state indicates rewarded action
@@ -110,7 +136,7 @@ class PWMTask():
         assert BATCHSIZE==1, 'sampling one stimset'
         SAi,SBi = self.stim_set[np.random.choice(len(self.stim_set))]
         # embed stim
-        SA,SB = self.embed_onehot([SAi,SBi])
+        SA,SB = self.embed_stim([SAi,SBi])
         obsA = np.zeros([trlen,self.stimdim]) # two stim
         obsA[0] = SA
         obsA[-1] = SB
@@ -123,15 +149,20 @@ class PWMTask():
         E = np.eye(self.stimdim)
         return E[intL]
 
+    def embed_gauss(self,intL,meanL,var):
+        """ 
+        intL is index of stimuli to embed
+        meanL is list of means of stimuli
+        assumes same var 
+        E is [stimdim,nstim]
+        """
+        E = np.random.normal(meanL,var,size=[self.stimdim,len(meanL)])
+        return E.T[intL]
+
 
 
 class ActorCritic(tr.nn.Module):
     """ implementation NOTEs: 
-
-    TODO: 
-     - restructure learning target setup to allow 
-     TD lambda continuum between onestep TD and MC 
-
     """
   
     def __init__(self,indim=2,nactions=3,stsize=24,gamma=1.0,learnrate=0.005,TDupdate=False):

@@ -21,6 +21,10 @@ How does variance in stimulus distirbution affect training?
 
 ![exp-delay-result](figures/delaylen.png)
 
+**Result (aux): non-monotonic relationship**
+- unclear why lower variance would ever impair training. maybe something to do with range/null space of initial input weight matrix.
+
+![exp-delay-result](figures/stimvar-aux1.png)
 
 ## Experiment: Variance-Curriculum
 Does pretraining lower variance improve training time?
