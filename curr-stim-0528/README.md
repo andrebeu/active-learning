@@ -38,7 +38,10 @@ Does pretraining lower variance improve training time?
 ![exp-delay-result](figures/delay-curriculum.png)
 
 ## Discussion
-internal representations as signal to advance curriculum
+Internal representations as signal to advance curriculum
 
 ### Note to self
 Since this repo was copied from curr-delay, the goal is to maintain backward compatibility
+
+### Implementation efficiency
+- using multiprocessing library to parallelize multi-seed experiments  
