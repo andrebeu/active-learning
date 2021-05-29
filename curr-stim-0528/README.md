@@ -23,6 +23,7 @@ How does variance in stimulus distirbution affect training?
 
 **Result (aux): non-monotonic relationship**
 - unclear why lower variance would ever impair training. maybe something to do with range/null space of initial input weight matrix.
+- note lower stim distribution variance makes learning curve more flat.
 
 ![exp-delay-result](figures/stimvar-aux1.png)
 
