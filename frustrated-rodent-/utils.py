@@ -36,6 +36,7 @@ class ActorCritic(tr.nn.Module):
         self.gamma = gamma
         self.TDupdate = TDupdate
         self.build()
+        self.reset_rnn_state()
         return None
 
     def build(self):
@@ -44,6 +45,7 @@ class ActorCritic(tr.nn.Module):
         # policy parameters
         # self.rnncell = tr.nn.LSTMCell(self.indim,self.stsize,bias=True)
         self.rnn = tr.nn.LSTM(self.indim,self.stsize,bias=True)
+        self.rnncell = tr.nn.LSTMCell(self.indim,self.stsize,bias=True)
         self.rnn_st0 = tr.nn.Parameter(tr.rand(2,1,self.stsize),requires_grad=True)
         self.rnn2val = tr.nn.Linear(self.stsize,1,bias=True)
         self.rnn2pi = tr.nn.Linear(self.stsize,self.nactions,bias=True)
@@ -53,12 +55,20 @@ class ActorCritic(tr.nn.Module):
         )
         return None
 
-    def reset_state(self):
+    def reset_rnn_state(self):
         self.h_t,self.c_t = self.rnn_st0
         return None
 
     def unroll_trial(self,obsA):
-        return rnn_states
+        assert BATCHSIZE==1,'sqeueze batchdim'
+        obsA = tr.Tensor(obsA).unsqueeze(1) # batchdim
+        h_t,c_t = self.h_t,self.c_t
+        rnn_hstL = []
+        for obs in obsA:
+            h_t,c_t = self.rnncell(obs,(h_t,c_t))
+            rnn_hstL.append(h_t)
+        rnn_out = tr.stack(rnn_hstL) # stack 
+        return rnn_out
 
     def unroll_trial_implicit(self,obsA):
         """
@@ -68,10 +78,8 @@ class ActorCritic(tr.nn.Module):
          """
         assert BATCHSIZE==1,'sqeueze batchdim'
         obsA = tr.Tensor(obsA).unsqueeze(1) # batchdim
-
         # propo rnn and forward pass head layers
         rnn_out,h_n = self.rnn(obsA)
-
         assert len(h_n) == 2,len(h_n)
         assert len(rnn_out) == len(obsA)
         vhatA = self.rnn2val(rnn_out)
@@ -95,17 +103,15 @@ class ActorCritic(tr.nn.Module):
         """
         returns = tr.Tensor(compute_returns(expD['reward'],gamma=self.gamma))
         assert BATCHSIZE==1,'squeezing batchdim'
-        vhats = tr.Tensor(expD['vhat']).squeeze()
+        vhats = tr.cat(expD['vhat'])
         # form RL target
         if self.TDupdate: # actor-critic loss
             delta = tr.Tensor(expD['reward'][:-1])+self.gamma*vhats[1:].squeeze()-vhats[:-1].squeeze()
             delta = tr.cat([delta,tr.Tensor([0])])
         else: # REINFORCE
-            delta = tr.Tensor(returns) - vhats
+            delta = returns - vhats
         # form RL loss
         logpr_actions = expD['logpr_actions']
-        print('logpr_actions',tr.Tensor(logpr_actions).shape)
-        print('delta',delta.shape)
         los_pi = tr.mean(delta*tr.Tensor(logpr_actions))
         ent_pi = tr.mean(tr.Tensor([distr.entropy().mean() for distr in expD['pi']])) # mean over time
         los_val = tr.mean(tr.square(returns - vhats)) # MSE
@@ -234,23 +240,16 @@ def run_epoch_FR(agent,task):
     epoch_len = task.epoch_len
     # epoch_len = trlen
     tr_c = 0
+    agent.reset_rnn_state()
     while tr_c+trlen <= epoch_len:
         tr_c += trlen
         epoch_data['ttype'].append(int(valid_trial))
         # run trial
         stateL,obsA = task.sample_trial(valid_trial)
-        """ 
-        currently unroll_trial uses RNN
-        between trials RNN gets reset
-        leads to issues in gradient computatio
-        TODO: switch to explicit rnn unroll
-         apply pihead within here to sample action
-         save softmax act of pi head over trials
-          then make distr obj in update
-          parallelizing over all time steps
-          to call .log_prob(actions)
-        """
-        pi_distr,vhatA = agent.unroll_trial(obsA)
+        rnn_out = agent.unroll_trial(obsA)
+        piact = agent.rnn2pi(rnn_out)
+        pism = piact.softmax(-1) 
+        pi_distr = Categorical(pism)
         actionL = pi_distr.sample()
         logpr_actions = pi_distr.log_prob(actionL)
         ##
@@ -260,7 +259,7 @@ def run_epoch_FR(agent,task):
         epoch_data['obs'].extend(obsA)
         epoch_data['action'].extend(actionL)
         epoch_data['reward'].extend(rewardL)
-        epoch_data['vhat'].extend(vhatA)
+        epoch_data['vhat'].extend(agent.rnn2val(rnn_out))
         epoch_data['logpr_actions'].extend(logpr_actions)
         epoch_data['pi'].append(pi_distr)
     ## padding and pub modify trial data
