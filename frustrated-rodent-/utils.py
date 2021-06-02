@@ -3,6 +3,7 @@ import torch as tr
 from collections import namedtuple
 from torch.distributions.categorical import Categorical
 
+
 BATCHSIZE = 1 # no batching, "online"
 
 
@@ -21,6 +22,7 @@ def compute_returns(rewards,gamma=1.0):
         )) for t in range(T)
     ]) ## not sure how to parse this
     return returns
+
 
 
 class ActorCritic(tr.nn.Module):
@@ -46,7 +48,7 @@ class ActorCritic(tr.nn.Module):
         # self.rnncell = tr.nn.LSTMCell(self.indim,self.stsize,bias=True)
         self.rnn = tr.nn.LSTM(self.indim,self.stsize,bias=True)
         self.rnncell = tr.nn.LSTMCell(self.indim,self.stsize,bias=True)
-        self.rnn_st0 = tr.nn.Parameter(tr.rand(2,1,self.stsize),requires_grad=True)
+        self.rnn_st0 = tr.nn.Parameter(tr.rand(2,1,1,self.stsize),requires_grad=True)
         self.rnn2val = tr.nn.Linear(self.stsize,1,bias=True)
         self.rnn2pi = tr.nn.Linear(self.stsize,self.nactions,bias=True)
         # optimization
@@ -70,7 +72,7 @@ class ActorCritic(tr.nn.Module):
         rnn_out = tr.stack(rnn_hstL) # stack 
         return rnn_out
 
-    def unroll_trial_implicit(self,obsA):
+    def unroll_trial_implicit_old(self,obsA):
         """
         given sequence of stimuli, unrolls rnn
          returns actions and hidden states
@@ -96,31 +98,52 @@ class ActorCritic(tr.nn.Module):
         pi_distr = Categorical(pism)
         return pi_distr,vhatA
 
+    def unroll_trial_implicit(self,obsA):
+        """
+        given sequence of stimuli, unrolls rnn
+         returns actions and hidden states
+        efficient: forward layers applied in parallel
+         """
+        assert BATCHSIZE==1,'sqeueze batchdim'
+        obsA = tr.Tensor(obsA).unsqueeze(1) # batchdim
+        # propo rnn and forward pass head layers
+        rnn_out,(self.h_t,self.c_t) = self.rnn(obsA)
+        # print(rnn_out.shape)
+        return rnn_out
+
+    def compute_delta(self,rewards,vhats):
+        assert BATCHSIZE==1,'squeezing batchdim'
+        returns = tr.Tensor(compute_returns(rewards,self.gamma))
+        vhats = tr.cat(vhats).squeeze()
+        # print('g',returns.shape,returns)
+        # print('vh',vhats.shape,vhats)
+        # form RL target
+        if self.TDupdate: # actor-critic loss
+            Ghat = tr.Tensor(expD['reward'][:-1]) + self.gamma*vhats[1:].squeeze()
+            delta = Ghat - vhats[:-1].squeeze()
+            delta = tr.cat([delta,tr.Tensor([0])])
+        else: # REINFORCE
+            delta = returns - vhats
+        # print('d',delta.shape,delta)
+        return delta
+
     def update(self,expD):
         """ 
         supported REINFORCE and (broken) A2C updates 
         expects expD = {'state','obs','action','reward','pi','vhat'}
         """
-        returns = tr.Tensor(compute_returns(expD['reward'],gamma=self.gamma))
-        assert BATCHSIZE==1,'squeezing batchdim'
-        vhats = tr.cat(expD['vhat'])
-        # form RL target
-        if self.TDupdate: # actor-critic loss
-            delta = tr.Tensor(expD['reward'][:-1])+self.gamma*vhats[1:].squeeze()-vhats[:-1].squeeze()
-            delta = tr.cat([delta,tr.Tensor([0])])
-        else: # REINFORCE
-            delta = returns - vhats
+        delta = self.compute_delta(expD['reward'],expD['vhat'])
+        logpr_actions = tr.Tensor(expD['logpr_actions'])
         # form RL loss
-        logpr_actions = expD['logpr_actions']
-        los_pi = tr.mean(delta*tr.Tensor(logpr_actions))
+        los_pi = tr.mean(delta*logpr_actions)
+        los_val = tr.mean(tr.square(delta)) # MSE
         ent_pi = tr.mean(tr.Tensor([distr.entropy().mean() for distr in expD['pi']])) # mean over time
-        los_val = tr.mean(tr.square(returns - vhats)) # MSE
-        los = 0.1*los_val-los_pi
         # update step
         self.optiop.zero_grad()
+        los = 0.2*los_val-los_pi
         los.backward()
         self.optiop.step()
-        return None 
+        return los_val,los_pi 
 
 
 
@@ -128,15 +151,16 @@ class PWMTaskFR():
     
     def __init__(self,stimdim=2,embed_stim='onehot',
         stim_set=[[0,1],[1,0]],stim_mean=None,stim_var=None,
-        trlen=5
+        trlen=5,epoch_len=60
         ):
         """ 
         action space {0:hold,1:left,2:right}
         stim_set is list of int tuples [(Sa,Sb)]
         """
-        self.max_reward = 12
-        self.epoch_len = 60 # pub happens on 61
+        self.epoch_len = epoch_len # pub happens on 61
         self.trlen = trlen
+        self.ntrials = self.epoch_len//trlen
+        self.max_trial_reward = self.ntrials
         # fixed
         self.stim_set = stim_set
         self.action_set = [0,1,2]
@@ -176,7 +200,7 @@ class PWMTaskFR():
             stateL = np.zeros(trlen)
             return stateL,obsA
         delay = trlen-2
-        assert delay>0 # 2 stim
+        assert delay>=0 # 2 stim
         ## NB stimulus selection assumes batchsize1
         assert BATCHSIZE==1, 'sampling one stimset'
         SAi,SBi = self.stim_set[np.random.choice(len(self.stim_set))]
@@ -196,8 +220,7 @@ class PWMTaskFR():
         reward +1 action
         """
         reward_action = int(stateL[-1] == actionL[-1])
-        print('ALshape',actionL.shape)
-        reward = np.concatenate([np.zeros_like(actionL[:-1]),[reward_action]])
+        reward = np.concatenate([np.zeros(len(actionL[:-1])),[reward_action]])
         assert reward.shape == stateL.shape
         return reward
 
@@ -207,12 +230,9 @@ class PWMTaskFR():
         whether next trial is valid or timeout
         """
         # hold everywhere except action
-        valid_trial = np.all(actionL[:-1].numpy() == 0)
-        if valid_trial:
-            rewardL = self._reward_lastaction_only(stateL,actionL)
-        else:
-            rewardL = np.zeros(len(stateL))
-        return rewardL,valid_trial
+        next_trial_is_valid = np.all(actionL[:-1].numpy() == 0)
+        rewardL = self._reward_lastaction_only(stateL,actionL)
+        return rewardL,next_trial_is_valid
 
 
     def pub(self,epoch_data):
@@ -220,6 +240,7 @@ class PWMTaskFR():
     
     def padding(self,epoch_data):
         return epoch_data
+
 
 
 def run_epoch_FR(agent,task):
@@ -246,41 +267,29 @@ def run_epoch_FR(agent,task):
         epoch_data['ttype'].append(int(valid_trial))
         # run trial
         stateL,obsA = task.sample_trial(valid_trial)
-        rnn_out = agent.unroll_trial(obsA)
+        rnn_out = agent.unroll_trial_implicit(obsA)
         piact = agent.rnn2pi(rnn_out)
         pism = piact.softmax(-1) 
         pi_distr = Categorical(pism)
         actionL = pi_distr.sample()
+        print('pi',pi_distr)
+        print('A',actionL.shape)
         logpr_actions = pi_distr.log_prob(actionL)
         ##
+        vhatL = agent.rnn2val(rnn_out)
         rewardL,valid_trial = task.reward_fn(stateL,actionL)
         # record
         epoch_data['state'].extend(stateL)
         epoch_data['obs'].extend(obsA)
         epoch_data['action'].extend(actionL)
         epoch_data['reward'].extend(rewardL)
-        epoch_data['vhat'].extend(agent.rnn2val(rnn_out))
+        epoch_data['vhat'].extend(vhatL)
         epoch_data['logpr_actions'].extend(logpr_actions)
         epoch_data['pi'].append(pi_distr)
     ## padding and pub modify trial data
     epoch_data = task.padding(epoch_data) 
     epoch_data = task.pub(epoch_data) 
     return epoch_data
-
-
-def calc_epoch_pi_los(expD):
-    """ 
-    helper for calculating loss when different 
-
-    unpack dataD (dict of lists of tensors)
-        lists correspond to trials in epoch
-    into expD (dict of tensors)
-        assumed by agent.update(expD)
-    """
-    data = {}
-    ntrials = len(data['reward'])
-    print('ntr',ntrials)
-    return expD
 
 
 if __name__ == "__main__":
@@ -295,5 +304,4 @@ if __name__ == "__main__":
             len(epoch_data['reward']),
             len(epoch_data['ttype'])
         )
-        assert len(epoch_data['reward'])==task.epoch_len
         agent.update(epoch_data)

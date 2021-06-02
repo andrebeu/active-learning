@@ -7,15 +7,17 @@
 * _would rather wait until end of day to get their water instead of doing this ridiculous task_. 
 
 ## simulation
+Goal: explore conditions for frustrated rodent phenomenon 
 * every epoch corresponds to a day, i.e. sequence of trials. 
-* at the end of the epoch, the agent gets alotted unclaimed reward, so that total reward is always same per epoch, but reward distribution over time differs.
-* manipulate discount factor to simulate preference for rewards now vs just waiting until end of day.
+* at the end of the epoch, the agent gets alotted unclaimed reward (pub), so that total reward is always same per epoch, but reward distribution over time differs.
 * simulate timeout violation punishment by setting epoch length fixed, and allowing agent to do more trials if fewer violations.
+* manipulate discount factor to simulate preference for rewards now vs just waiting until end of day.
+
 
 # Experiments
 
 ## goals
-explore conditions for frustrated rodent phenomenon occurs
+
 * show delay curriculum mitigates frustrated rodent phenomenon
   * reward too sparse if straight training on full trlen from start
 * effects of discount factor and TD methods with different horrizons?
@@ -38,8 +40,8 @@ explore conditions for frustrated rodent phenomenon occurs
 
 ## notes
 * task and agent objects. `runepoch` function loops `task.sample_trail()`.
-* agent actions influence trial type (valid vs not-valid). not valid is longer ITI / unrewarded "timeout".
-* needs to support different trial_len for each epoch to allow curriculum delay. epoch_len must be fixed. padding might be required when epoch len not divisible by trial len.
+* agent response influences trial type (valid vs not-valid). not valid corresponds to intertrial interval, implemented as a zero delay of length `trlen`.
+* supports different `trlen` for each epoch to allow curriculum delay. epoch_len must be fixed. padding might be required when epoch len not divisible by trial len.
 * pub happens on final step (epoch_len+1)
 
 ## simplifications
