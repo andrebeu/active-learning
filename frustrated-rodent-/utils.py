@@ -129,6 +129,9 @@ class ActorCritic(tr.nn.Module):
         supported REINFORCE and (broken) A2C updates 
         expects expD = {'state','obs','action','reward','pi','vhat'}
         """
+        ## unpack expD
+        rewards = tr.cat(expD['reward'])
+        ##
         returns = tr.Tensor(compute_returns(expD['reward'],self.gamma))
         vhats = expD['vhat'][0].squeeze()
         delta = returns - vhats
@@ -297,10 +300,16 @@ def run_epoch_FR(agent,task):
         epoch_data['logpr_actions'].append(logpr_actions)
         epoch_data['distr'].append(pi_distr)
         epoch_data['pism'].append(pism)
+    # flatten epoch_data    
+    # epoch_data = flattenDoLoL(epoch_data)
     # padding and pub modify trial data
-    epoch_data = task.padding(epoch_data) 
-    epoch_data = task.pub(epoch_data) 
+    # epoch_data = task.padding(epoch_data) 
+    # epoch_data = task.pub(epoch_data) 
     return epoch_data
+
+
+def flattenDoLoL(D):
+  return {k:[i for s in v for i in s] for k,v in D.items()}
 
 
 if __name__ == "__main__":
