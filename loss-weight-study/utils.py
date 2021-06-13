@@ -29,7 +29,8 @@ class ActorCritic(tr.nn.Module):
     """ implementation NOTEs: 
     """
   
-    def __init__(self,indim=2,nactions=3,stsize=24,gamma=1.0,learnrate=0.005,TDupdate=False):
+    def __init__(self,indim=2,nactions=3,stsize=24,gamma=1.0,
+        learnrate=0.005,TDupdate=False,lweight=0.1):
         super().__init__()
         self.indim = indim
         self.stsize = stsize
@@ -37,6 +38,7 @@ class ActorCritic(tr.nn.Module):
         self.learnrate = learnrate
         self.gamma = gamma
         self.TDupdate = TDupdate
+        self.vlos_weight = lweight
         self.build()
         self.reset_rnn_state()
         return None
@@ -110,18 +112,12 @@ class ActorCritic(tr.nn.Module):
         rnn_out,(self.h_t,self.c_t) = self.rnn(obsA)
         return rnn_out
 
-    def compute_delta(self,rewards,vhats):
+    def compute_TDdelta(self,rewards,vhats):
         assert BATCHSIZE==1,'squeezing batchdim'
-        returns = tr.Tensor(compute_returns(rewards,self.gamma))
-        vhats = tr.cat(vhats).squeeze()
         # form RL target
-        if self.TDupdate: # actor-critic loss
-            assert False,'broken TD'
-            Ghat = tr.Tensor(expD['reward'][:-1]) + self.gamma*vhats[1:].squeeze()
-            delta = Ghat - vhats[:-1].squeeze()
-            delta = tr.cat([delta,tr.Tensor([0])])
-        else: # REINFORCE
-            delta = returns - vhats
+        Ghat = tr.Tensor(expD['reward'][:-1]) + self.gamma*vhats[1:].squeeze()
+        delta = Ghat - vhats[:-1].squeeze()
+        delta = tr.cat([delta,tr.Tensor([0])])
         return delta
 
     def update(self,expD):
@@ -143,8 +139,7 @@ class ActorCritic(tr.nn.Module):
         # ent_pi = tr.mean(tr.Tensor([distr.entropy().mean() for distr in expD['pi']])) # mean over time
         # update step
         self.optiop.zero_grad()
-        # los = 0.05*los_val-los_pi
-        los = 0.1*los_val-los_pi
+        los = (self.vlos_weight*los_val)-los_pi
         los.backward()
         self.optiop.step()
         # return obj
@@ -191,7 +186,6 @@ class PWMTaskFR():
         """
         E = np.random.normal(meanL,var,size=[self.stimdim,len(meanL)])
         return E.T[intL]
-
 
     def sample_trial(self,ttype):
         """ 
@@ -252,9 +246,8 @@ class PWMTaskFR():
         # hold everywhere except action
         next_trial_is_valid = np.all(actionL[:-1].numpy() == 0)
         rewardL = self._reward_lastaction_only(stateL,actionL)
-        next_trial_is_valid = True
+        next_trial_is_valid = True # enforce valid trials
         return tr.Tensor(rewardL),next_trial_is_valid
-
 
     def pub(self,epoch_data):
         return epoch_data
@@ -306,8 +299,6 @@ def run_epoch_FR(agent,task):
         epoch_data['logpr_actions'].append(logpr_actions)
         epoch_data['distr'].append(pi_distr)
         epoch_data['pism'].append(pism)
-    # process epoch_data (shapes and types)
-    # epoch_data = process_epdata(epoch_data)
     # padding and pub modify trial data
     # epoch_data = task.padding(epoch_data) 
     # epoch_data = task.pub(epoch_data) 
@@ -322,16 +313,6 @@ def process_epdata(epdata):
     list_of_cat = ['pism','vhat','logpr_actions']
     for k in list_of_cat:
         epdata[k] = tr.cat(epdata[k]).squeeze()
-
-    # epdata['vhat'] = tr.cat(epdata['vhat']).squeeze()
-    # epdata['logpr_actions'] = tr.cat(epdata['logpr_actions'])
-    # for k in ['pism','vhat']:
-    #     print(k)
-    #     epdata[k] = tr.cat(epdata[k])
-    # epdata = {k:tr.cat(v) for k,v in epdata.items()}
-    # for k,v in epdata.items():
-    #     print(k)
-    #     print(k,'.',v)
     return epdata
 
 def flattenDoLoL(D):
@@ -339,6 +320,21 @@ def flattenDoLoL(D):
     exceptL = ['distr'] # exception
     return {k:[i for s in v for i in s] for k,v in D.items() if k not in exceptL}
 
+
+# multiprocess fun for parallelizing simulations across seeds
+def exp_mp(seed_exp,nseeds,gsvar=None):
+  """ 
+  first argument is seed_exp method
+  seed_exp takes one dummy arguments
+    placeholder for iterating over seeds
+  seed_exp could also take second argument
+    variable condition repeated over seeds 
+    used for gridsearching
+  """
+  with concurrent.futures.ProcessPoolExecutor() as exe:
+    data = exe.map(seed_exp, np.arange(nseeds), np.repeat(gsvar,nseeds))
+  return np.array([i for i in data])
+  
 
 if __name__ == "__main__":
     agent_kw = {}
