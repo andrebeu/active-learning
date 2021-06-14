@@ -1,17 +1,29 @@
 # loss weight study
 * how does policy loss and value loss balance each other out?
-* havent found a principled way to choose critic vs actor loss weights. 
+* no principled way to choose critic vs actor loss weights. 
 
 
+## main results: fit-pwm5
+* single seed experiments, gridsearching critic loss weight and hand tuned learning rate. 
 
-## main result: fit-pwm5
-* ran single seed experiments, gridsearching critic loss weight and learning rate. 
-* fastest training attained with `learning rate = 0.005` & `critic weight = 2` 
+* in single seed experiments, when `epochlen = 60`, training for `30k epochs`, only found learning for `learning rate = 0.005` & `critic weight = 5` 
 
-![fit-pwm5-result-LR0.005](figures/delaylen.png)
+![fit-pwm5-result-LR0.005](figures/pwm5-eplen60-vweight_loss-REINFORCE-lrate_0.0050-1seed.png)
 
+* when `epochlen = 15`, in multiseed setup training for `10k epochs`, found learning for `critic weight = 2,3,4,5` 
+
+![fit-pwm5-result-LR0.005](figures/pwm5-eplen15-vweight_loss-REINFORCE-lrate_0.0050-3seed.png)
+
+
+## discussion
+* important observation: one reocurring failure mode of a loss weight that is too low is the value loss explodes.
+* important challenge for future simulations: changing the trial length changes the optimal value loss weight setting
+
+
+## aux results: poor training for different learning rates
 ![fit-pwm5-result-LR0.001](figures/pwm5-vweight_loss-REINFORCE-lrate_0.0010-1seed.png)
 ![fit-pwm5-result-LR0.01](figures/pwm5-vweight_loss-REINFORCE-lrate_0.0100-1seed.png)
+
 
 ## fit-pwm notebooks discussion re: critic loss weight magnitude
 * unlike other applications, where I used a critic loss weight less than one, here better performance is attained with having the critic (value) loss weight greater (sometimes an order of magnitude) than the policy loss.

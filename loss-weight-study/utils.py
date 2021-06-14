@@ -65,6 +65,10 @@ class ActorCritic(tr.nn.Module):
         return None
 
     def unroll_trial(self,obsA):
+        """ 
+        useful for analyzing within trial 
+        model representations 
+        """
         assert BATCHSIZE==1,'sqeueze batchdim'
         obsA = tr.Tensor(obsA).unsqueeze(1) # batchdim
         h_t,c_t = self.h_t,self.c_t
