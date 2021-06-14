@@ -2,10 +2,11 @@ import numpy as np
 import torch as tr
 from collections import namedtuple
 from torch.distributions.categorical import Categorical
-
+import multiprocessing as mp
+import concurrent
 
 BATCHSIZE = 1 # no batching, "online"
-
+SDIM = 6
 
 
 def compute_returns(rewards,gamma=1.0):
@@ -29,7 +30,7 @@ class ActorCritic(tr.nn.Module):
     """ implementation NOTEs: 
     """
   
-    def __init__(self,indim=2,nactions=3,stsize=24,gamma=1.0,
+    def __init__(self,indim=SDIM,nactions=3,stsize=24,gamma=1.0,
         learnrate=0.005,TDupdate=False,lweight=0.1):
         super().__init__()
         self.indim = indim
@@ -73,32 +74,6 @@ class ActorCritic(tr.nn.Module):
             rnn_hstL.append(h_t)
         rnn_out = tr.stack(rnn_hstL) # stack 
         return rnn_out
-
-    def unroll_trial_implicit_old(self,obsA):
-        """
-        given sequence of stimuli, unrolls rnn
-         returns actions and hidden states
-        efficient: forward layers applied in parallel
-         """
-        assert BATCHSIZE==1,'sqeueze batchdim'
-        obsA = tr.Tensor(obsA).unsqueeze(1) # batchdim
-        # propo rnn and forward pass head layers
-        rnn_out,h_n = self.rnn(obsA)
-        assert len(h_n) == 2,len(h_n)
-        assert len(rnn_out) == len(obsA)
-        vhatA = self.rnn2val(rnn_out)
-        piact = self.rnn2pi(rnn_out)
-        pism = piact.softmax(-1) 
-        # probability of each action each timestep
-        assert pism.shape == (len(obsA),1,self.nactions)
-        """
-        distribution constructor 
-         takes probabilities of each category
-        returns distribution object with
-         .log_prob(action) and .sample() methods
-        """
-        pi_distr = Categorical(pism)
-        return pi_distr,vhatA
 
     def unroll_trial_implicit(self,obsA):
         """
@@ -150,9 +125,9 @@ class ActorCritic(tr.nn.Module):
 
 class PWMTaskFR():
     
-    def __init__(self,stimdim=2,embed_stim='onehot',
-        stim_set=[[0,1],[1,0]],stim_mean=None,stim_var=None,
-        trlen=5,epoch_len=60
+    def __init__(self,stimdim=SDIM,embed_stim='onehot',
+        stimset='pwm0',stim_mean=None,stim_var=None,
+        trlen=3,epoch_len=60
         ):
         """ 
         action space {0:hold,1:left,2:right}
@@ -163,7 +138,7 @@ class PWMTaskFR():
         self.ntrials = self.epoch_len//trlen
         self.max_trial_reward = self.ntrials
         # fixed
-        self.stim_set = stim_set
+        self.stim_set = self._get_stimset(stimset)
         self.action_set = [0,1,2]
         self.stimdim = stimdim
         # embedding
@@ -173,6 +148,18 @@ class PWMTaskFR():
             self.embed_stim = lambda X: self._embed_gauss(X,stim_mean,stim_var)
         return None
     
+    def _get_stimset(self,setstr):
+        if setstr == 'pwm0':
+            stim_set=[[0,1],[1,0]]
+        elif setstr == 'pwm5':
+            stim_set=[
+                [0,1],[1,0],
+                [1,2],[2,1],
+                [2,3],[3,2],
+                [3,4],[4,3],
+                ]
+        return stim_set
+
     def _embed_onehot(self,intL):
         E = np.eye(self.stimdim)
         return E[intL]
@@ -198,7 +185,7 @@ class PWMTaskFR():
         if ttype==False: # ITI
             obsA = np.zeros([trlen,self.stimdim]) # two stim
             stateL = np.zeros(trlen)
-            assert False,'no invalid trial'
+            assert False,'invalid trial broken'
             return stateL,obsA
         delay = trlen-2
         assert delay>=0 # 2 stim
@@ -225,19 +212,6 @@ class PWMTaskFR():
         assert reward.shape == stateL.shape
         return reward
     
-    def _reward_hold(self,stateL,actionL):
-        """
-        reward 1 hold 
-        reward +1 action
-        """
-        # print(actionL)
-        reward_hold = -1*np.not_equal(actionL[:-1].numpy(),np.zeros_like(actionL[:-1]))
-        reward_action = int(stateL[-1] == actionL[-1])
-        assert BATCHSIZE == 1, 'squeezing batchsize'
-        reward = np.concatenate([reward_hold.squeeze(1),tr.Tensor([reward_action])])
-        assert reward.shape == stateL.shape
-        return reward
-
     def reward_fn(self,stateL,actionL):
         """ 
         computes reward and determines 
@@ -250,9 +224,6 @@ class PWMTaskFR():
         return tr.Tensor(rewardL),next_trial_is_valid
 
     def pub(self,epoch_data):
-        return epoch_data
-    
-    def padding(self,epoch_data):
         return epoch_data
 
 
@@ -306,7 +277,7 @@ def run_epoch_FR(agent,task):
 
 def process_epdata(epdata):
     """ 
-    given epoch data from actor
+    given epoch data from actor (run_epoch fun)
     process for agent.update method
     """
     epdata = flattenDoLoL(epdata)
@@ -323,17 +294,18 @@ def flattenDoLoL(D):
 
 # multiprocess fun for parallelizing simulations across seeds
 def exp_mp(seed_exp,nseeds,gsvar=None):
-  """ 
-  first argument is seed_exp method
-  seed_exp takes one dummy arguments
-    placeholder for iterating over seeds
-  seed_exp could also take second argument
-    variable condition repeated over seeds 
-    used for gridsearching
-  """
-  with concurrent.futures.ProcessPoolExecutor() as exe:
-    data = exe.map(seed_exp, np.arange(nseeds), np.repeat(gsvar,nseeds))
-  return np.array([i for i in data])
+    """ 
+    first argument is seed_exp method
+    seed_exp takes one dummy argument `seed_num`
+     placeholder for iterating over seeds
+    seed_exp could also take second argument `gsvar`
+     variable condition repeated over seeds 
+     used for gridsearching
+    returns list of outputs from each seed_exp
+    """
+    with concurrent.futures.ProcessPoolExecutor() as exe:
+        data = exe.map(seed_exp, np.arange(nseeds), np.repeat(gsvar,nseeds))
+    return np.array([i for i in data])
   
 
 if __name__ == "__main__":
