@@ -6,7 +6,7 @@ import multiprocessing as mp
 import concurrent
 
 BATCHSIZE = 1 # no batching, "online"
-SDIM = 6
+SDIM = 6 # pwm5
 
 
 def compute_returns(rewards,gamma=1.0):
@@ -189,7 +189,6 @@ class PWMTaskFR():
         if ttype==False: # ITI
             obsA = np.zeros([trlen,self.stimdim]) # two stim
             stateL = np.zeros(trlen)
-            assert False,'invalid trial broken'
             return stateL,obsA
         delay = trlen-2
         assert delay>=0 # 2 stim
@@ -216,15 +215,26 @@ class PWMTaskFR():
         assert reward.shape == stateL.shape
         return reward
     
+    def _reward_invalid_trial(self,stateL,actionL):
+        return None
+
     def reward_fn(self,stateL,actionL):
         """ 
-        computes reward and determines 
-        whether next trial is valid or timeout
+        given states [trlen] and actions [trlen] 
+         computes trial reward and determines 
+         whether next trial is valid or timeout
+          if previous trial is timeout
+          rewards are all zero and next trial is valid
         """
-        # hold everywhere except action
-        next_trial_is_valid = np.all(actionL[:-1].numpy() == 0)
-        rewardL = self._reward_lastaction_only(stateL,actionL)
-        next_trial_is_valid = True # enforce valid trials
+        if stateL[-1] == 0:
+            # print('invalid trial')
+            next_trial_is_valid = True
+            rewardL = tr.zeros(len(stateL))
+        else:
+            # print('valid trial')
+            # hold everywhere except action
+            next_trial_is_valid = np.all(actionL[:-1].numpy() == 0)
+            rewardL = self._reward_lastaction_only(stateL,actionL)
         return tr.Tensor(rewardL),next_trial_is_valid
 
     def pub(self,epoch_data):
@@ -278,6 +288,8 @@ def run_epoch_FR(agent,task):
     # epoch_data = task.padding(epoch_data) 
     # epoch_data = task.pub(epoch_data) 
     return epoch_data
+
+
 
 def process_epdata(epdata):
     """ 
