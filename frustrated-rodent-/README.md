@@ -1,4 +1,4 @@
-# the frustrated rodent simulation
+# The frustrated rodent simulation
 
 ## phenomenon 
 * rodents get full water alotment at the end of the day
@@ -6,7 +6,7 @@
 * if they find the task gets too difficult, they stop doing trials / violate 100% 
 * _would rather wait until end of day to get their water instead of doing this ridiculous task_. 
 
-## simulation
+## simulation description
 Goal: explore conditions for frustrated rodent phenomenon 
 * every epoch corresponds to a day, i.e. sequence of trials. 
 * at the end of the epoch, the agent gets alotted unclaimed reward (pub), so that total reward is always same per epoch, but reward distribution over time differs.
@@ -36,6 +36,23 @@ Goal: explore conditions for frustrated rodent phenomenon
 * explore: TD updates
   * 
 
+
+## Result (secondary) loss weight fitting
+* previous simulations, I realized loss weight had to be quite high compared to other applications to get training off the ground. here I ran a few simualtions looking for ceiling performance in simplest case with violation timeout trials (3 trials, trlen 3).
+
+* found ceiling performance with 3 trials of trlen 3
+  * training for 100k
+  * gamma=1.0, learn_rate=0.005
+  * tried different loss_weights
+  * 3 seeds per condition
+
+* to verify how learning differed across loss weights, did a small search over different weight values
+![fit-pwm5-reward-LR0.005](figures/loss+reward-pwm5eplen9-REINFORCE-lrate_0.0050-6seeds-gridsearch_lossweight-1925923314.png)
+
+* to help understand number of trials violated, I plotted mean (across seeds) number of valid trials
+![fit-pwm5-trialcount-LR0.005](figures/trial_count-pwm5eplen9-REINFORCE-lrate_0.0050-6seeds-gridsearch_lossweight-1925923314.png)
+
+
 # implementation 
 
 ## notes
@@ -45,7 +62,7 @@ Goal: explore conditions for frustrated rodent phenomenon
 * pub happens on final step (epoch_len+1)
 
 ## simplifications
-* two stimuli, gaussian but maximally separated
+* 5 stimuli (ABCDE), onehot embeddings
 * epoch length fixed at 60, ITI = trlen = 5 (delay 3)
 
 ## note on sparse reward
