@@ -1,7 +1,7 @@
 # loss weight study
 * how does policy loss and value loss balance each other out?
 * no principled way to choose critic vs actor loss weights. 
-
+* no timeout in violated trials
 
 ## main results: fit-pwm5
 * single seed experiments, gridsearching critic loss weight and hand tuned learning rate. 
