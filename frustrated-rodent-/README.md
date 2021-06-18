@@ -44,6 +44,7 @@ Goal: explore conditions for frustrated rodent phenomenon
   * training for 100k
   * gamma=1.0, learn_rate=0.005
   * tried different loss_weights
+  * with violation timeout, no pub
   * 3 seeds per condition
 
 * to verify how learning differed across loss weights, did a small search over different weight values
@@ -52,6 +53,10 @@ Goal: explore conditions for frustrated rodent phenomenon
 * to help understand number of trials violated, I plotted mean (across seeds) number of valid trials
 ![fit-pwm5-trialcount-LR0.005](figures/trial_count-pwm5eplen9-REINFORCE-lrate_0.0050-6seeds-gridsearch_lossweight-1925923314.png)
 
+* followup replication experiment using half number of training trials confirmed good training (although not ceiling) obtained with lossweight within `0.5-3`
+![fit-pwm5-trialcount-LR0.005](figures/trial_count-pwm5eplen9-REINFORCE-lrate_0.0050-3seeds-gridsearch_lossweight-4301372661.png)
+
+* notebook: `exp-loss_weights-pwm5-3trials_timeout`
 
 # implementation 
 
