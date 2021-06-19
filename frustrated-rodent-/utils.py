@@ -88,7 +88,7 @@ class ActorCritic(tr.nn.Module):
         assert BATCHSIZE==1,'sqeueze batchdim'
         obsA = tr.Tensor(obsA).unsqueeze(1) # batchdim
         # prop rnn and forward pass head layers
-        rnn_out,(self.h_t,self.c_t) = self.rnn(obsA)
+        rnn_out,(self.h_t,self.c_t) = self.rnn(obsA,(self.h_t,self.c_t))
         return rnn_out
 
     def compute_TDdelta(self,rewards,vhats):
@@ -124,7 +124,6 @@ class ActorCritic(tr.nn.Module):
         # return obj
         update_data = {'vlos':los_val,'plos':los_pi}
         return update_data
-
 
 
 class PWMTaskFR():
@@ -186,10 +185,12 @@ class PWMTaskFR():
         - reward_t = reward_fn(state,action)
         """
         trlen = self.trlen
-        if ttype==False: # ITI
+        if int(ttype)==False: # ITI
             obsA = np.zeros([trlen,self.stimdim]) # two stim
             stateL = np.zeros(trlen)
             return stateL,obsA
+        elif int(ttype)==2: # PUB trial
+            None
         delay = trlen-2
         assert delay>=0 # 2 stim
         ## NB stimulus selection assumes batchsize1
@@ -238,11 +239,16 @@ class PWMTaskFR():
         return tr.Tensor(rewardL),next_trial_is_valid
 
     def pub(self,epoch_data):
+        print('pub')
+        print(epoch_data.keys())
+        print(epoch_data['state'])
+        print(epoch_data['logpr_actions'])
+
         return epoch_data
 
 
 
-def run_epoch_FR(agent,task):
+def run_epoch_FR(agent,task,pub=False):
     """ FRsim env-actor logic 
     """
     epoch_data = {
@@ -263,6 +269,7 @@ def run_epoch_FR(agent,task):
     agent.reset_rnn_state()
     valid_trial = True
     while tr_c+trlen <= epoch_len:
+        print('tr',tr_c)
         tr_c += trlen
         epoch_data['ttype'].append([int(valid_trial)])
         # run trial
@@ -286,7 +293,8 @@ def run_epoch_FR(agent,task):
         epoch_data['pism'].append(pism)
     # padding and pub modify trial data
     # epoch_data = task.padding(epoch_data) 
-    # epoch_data = task.pub(epoch_data) 
+    if pub:
+        epoch_data = task.pub(epoch_data) 
     return epoch_data
 
 
