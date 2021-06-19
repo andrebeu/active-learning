@@ -37,7 +37,7 @@ Goal: explore conditions for frustrated rodent phenomenon
   * 
 
 
-## Result (secondary) loss weight fitting
+## Result 06/18 (secondary) loss weight fitting
 * previous simulations, I realized loss weight had to be quite high compared to other applications to get training off the ground. here I ran a few simualtions looking for ceiling performance in simplest case with violation timeout trials (3 trials, trlen 3).
 
 * found ceiling performance with 3 trials of trlen 3
@@ -73,5 +73,10 @@ Goal: explore conditions for frustrated rodent phenomenon
 ## note on sparse reward
 * currently failing to hold (during trial and ITI) makes the following trial not-valid. since not-valid trials have no reward opportunity, the envrionment reward is very sparse. might make learning difficult if agent gets stuck in violating every trial. might need to pretrain holding behavior to get learning off the ground. 
 
-## note: critical bug 05/12
+## note: impactful bug 06/19
+* RNN state was not being carried over trial boundaries. replaced `self.rnn(obsA)`  with `self.rnn(obsA,(self.h_t,self.c_t))`. secondary results from 05/18 invalidaded. also invalidates results from `loss-weight-study-0614`.
+
+## note: critical bug 06/12
 * when unrolling the environment, I was previously collecting data by using `list.extend()`. when extending a list with pytorch tensors, the tensor object lost track of gradient information. 
+
+

@@ -79,9 +79,9 @@ class ActorCritic(tr.nn.Module):
         rnn_out = tr.stack(rnn_hstL) # stack 
         return rnn_out
 
-    def unroll_trial_implicit(self,obsA):
+    def unroll_rnn(self,obsA):
         """
-        given sequence of stimuli, unrolls rnn
+        given sequence of stimuli [steps,stimdim], unrolls rnn
          returns actions and hidden states
         efficient: forward layers applied in parallel
          """
@@ -90,6 +90,16 @@ class ActorCritic(tr.nn.Module):
         # prop rnn and forward pass head layers
         rnn_out,(self.h_t,self.c_t) = self.rnn(obsA,(self.h_t,self.c_t))
         return rnn_out
+    
+    def play_trial(self,obsA):
+        rnn_out = self.unroll_rnn(obsA)
+        vhatL = self.rnn2val(rnn_out)
+        piact = self.rnn2pi(rnn_out)
+        pism = piact.softmax(-1) 
+        pi_distr = Categorical(pism)
+        actionL = pi_distr.sample()
+        logpr_actions = pi_distr.log_prob(actionL)
+        return vhatL,pism,pi_distr,actionL,logpr_actions
 
     def compute_TDdelta(self,rewards,vhats):
         assert BATCHSIZE==1,'squeezing batchdim'
@@ -227,29 +237,42 @@ class PWMTaskFR():
           if previous trial is timeout
           rewards are all zero and next trial is valid
         """
-        if stateL[-1] == 0:
-            # print('invalid trial')
+        if stateL[-1] == 0: # current trial is invalid
             next_trial_is_valid = True
             rewardL = tr.zeros(len(stateL))
-        else:
-            # print('valid trial')
+        else: # current trial is valid
             # hold everywhere except action
             next_trial_is_valid = np.all(actionL[:-1].numpy() == 0)
             rewardL = self._reward_lastaction_only(stateL,actionL)
         return tr.Tensor(rewardL),next_trial_is_valid
+    
 
-    def pub(self,epoch_data):
-        print('pub')
-        print(epoch_data.keys())
-        print(epoch_data['state'])
-        print(epoch_data['logpr_actions'])
-
+    def pub(self,agent,epoch_data):
+        """ pub """
+        pub_state = 9
+        pub_obs_int = SDIM-1 # last obs vector
+        Spub = self.embed_stim(pub_obs_int)
+        ## fw agent
+        vhatL,pism,pi_distr,actionL,logpr_actions = agent.play_trial([Spub])
+        trial_rewards = tr.sum(tr.cat(epoch_data['reward']))
+        pub_reward = [self.ntrials - trial_rewards]
+        ##
+        epoch_data['state'].append([pub_state])
+        epoch_data['obs'].append([Spub])
+        epoch_data['action'].append(actionL)
+        epoch_data['reward'].append(pub_reward)
+        epoch_data['vhat'].append(vhatL)
+        epoch_data['logpr_actions'].append(logpr_actions)
+        epoch_data['distr'].append(pi_distr)
+        epoch_data['pism'].append(pism)
         return epoch_data
 
 
 
-def run_epoch_FR(agent,task,pub=False):
+def run_epoch_FR(agent,task,pub=False,vto=True):
     """ FRsim env-actor logic 
+    pub: `bool`, include pub reward
+    vto: `bool`, allow violation timeout trial
     """
     epoch_data = {
         'state':[],
@@ -269,19 +292,16 @@ def run_epoch_FR(agent,task,pub=False):
     agent.reset_rnn_state()
     valid_trial = True
     while tr_c+trlen <= epoch_len:
-        print('tr',tr_c)
+        # print('tr',tr_c)
         tr_c += trlen
         epoch_data['ttype'].append([int(valid_trial)])
         # run trial
         stateL,obsA = task.sample_trial(valid_trial)
-        rnn_out = agent.unroll_trial_implicit(obsA)
-        vhatL = agent.rnn2val(rnn_out)
-        piact = agent.rnn2pi(rnn_out)
-        pism = piact.softmax(-1) 
-        pi_distr = Categorical(pism)
-        actionL = pi_distr.sample()
-        logpr_actions = pi_distr.log_prob(actionL)
+        # fw agent
+        vhatL,pism,pi_distr,actionL,logpr_actions = agent.play_trial(obsA)
         rewardL,valid_trial = task.reward_fn(stateL,actionL)
+        if not vto:
+            valid_trial = True
         # record
         epoch_data['state'].append(stateL)
         epoch_data['obs'].append(obsA)
@@ -294,7 +314,7 @@ def run_epoch_FR(agent,task,pub=False):
     # padding and pub modify trial data
     # epoch_data = task.padding(epoch_data) 
     if pub:
-        epoch_data = task.pub(epoch_data) 
+        epoch_data = task.pub(agent,epoch_data) 
     return epoch_data
 
 
