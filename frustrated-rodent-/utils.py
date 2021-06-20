@@ -30,7 +30,7 @@ class ActorCritic(tr.nn.Module):
     """ implementation NOTEs: 
     """
   
-    def __init__(self,indim=SDIM,nactions=3,stsize=24,gamma=1.0,
+    def __init__(self,indim=SDIM,nactions=3,stsize=48,gamma=1.0,
         learnrate=0.005,TDupdate=False,lweight=0.1):
         super().__init__()
         self.indim = indim
@@ -249,6 +249,7 @@ class PWMTaskFR():
 
     def pub(self,agent,epoch_data):
         """ pub """
+        assert False, 'nopub'
         pub_state = 9
         pub_obs_int = SDIM-1 # last obs vector
         Spub = self.embed_stim(pub_obs_int)
@@ -292,6 +293,7 @@ def run_epoch_FR(agent,task,pub=False,vto=True):
     agent.reset_rnn_state()
     valid_trial = True
     while tr_c+trlen <= epoch_len:
+        # agent.reset_rnn_state()
         # print('tr',tr_c)
         tr_c += trlen
         epoch_data['ttype'].append([int(valid_trial)])
@@ -300,8 +302,7 @@ def run_epoch_FR(agent,task,pub=False,vto=True):
         # fw agent
         vhatL,pism,pi_distr,actionL,logpr_actions = agent.play_trial(obsA)
         rewardL,valid_trial = task.reward_fn(stateL,actionL)
-        if not vto:
-            valid_trial = True
+        if not vto: valid_trial = True
         # record
         epoch_data['state'].append(stateL)
         epoch_data['obs'].append(obsA)
