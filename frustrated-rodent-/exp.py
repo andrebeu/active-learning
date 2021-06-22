@@ -14,7 +14,16 @@ tstamp = time.perf_counter_ns()
 from utils import *
 from model import *
 
+# parameter passing
+param_str = str(sys.argv[1])
+p1,p2,p3,p4 = param_str.split()
+lrate = float(p1) # 0.005
+stsize = float(p2) # 48
+vlos = float(p3) # 8
+elos = float(p4) # 0
 
+
+# parameter dict setup
 nseeds = 3
 ## setup
 args = {
@@ -23,10 +32,10 @@ args = {
   },
   'agent':{
     'gamma':1.0,
-    'learnrate':0.005,
-    'stsize':48,
-    'vlos_w':8,
-    'elos_w':0
+    'learnrate':lrate,
+    'stsize':stsize,
+    'vlos_w':vlos,
+    'elos_w':elos
   },
   'task':{
     'stimset':'pwm5',
