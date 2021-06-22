@@ -41,7 +41,10 @@ def process_epdata(epdata):
 def flattenDoLoL(D):
     """ dict of list of lists flattened into dict of lists"""
     exceptL = ['distr'] # exception
-    return {k:[i for s in v for i in s] for k,v in D.items() if k not in exceptL}
+    D2 = {k:[i for s in v for i in s] for k,v in D.items() if k not in exceptL}
+    for e in exceptL:
+        D2[e] = D[e]
+    return D2
 
 
 # runtime
@@ -96,36 +99,7 @@ def run_epoch_FR(agent,task,pub=False,vto=True):
     return epoch_data
 
 
-def seed_exp(seed,args):
-    """ loss [(value, policy),neps] """
-    # setup
-    np.random.seed(seed)
-    neps = args['train']['neps']
-    # task and agent definition
-    agent = ActorCritic(**args['agent'])
-    task = PWMTaskFR(**args['task'])
-    # init loop vars
-    reward = -np.ones(neps)
-    loss = -np.ones([2,neps]) 
-    pism = -np.ones([3,neps])
-    trcount = -np.ones(neps)
-    L = []
-    # loop over epochs
-    for epoch in range(neps):
-        # run
-        epoch_data = run_epoch_FR(agent,task)
-        epoch_data = process_epdata(epoch_data)
-        update_data = agent.update(epoch_data)
-        # record
-        trcount[epoch] = np.sum(epoch_data['ttype'])
-        reward[epoch] = np.sum(epoch_data['reward'])/task.ntrials
-        loss[:,epoch] = list(update_data.values())
-    data = {
-        'loss':loss,
-        'reward':reward,
-        'trcount':trcount
-    }
-    return data
+
 
 
 # multiprocess fun for parallelizing simulations across seeds

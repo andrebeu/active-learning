@@ -15,7 +15,7 @@ class ActorCritic(tr.nn.Module):
     """
   
     def __init__(self,indim=SDIM,nactions=3,stsize=48,gamma=1.0,
-        learnrate=0.005,TDupdate=False,lweight=0.1):
+        learnrate=0.005,TDupdate=False,vlos_w=0.1,elos_w=0.05):
         super().__init__()
         self.indim = indim
         self.stsize = stsize
@@ -23,7 +23,8 @@ class ActorCritic(tr.nn.Module):
         self.learnrate = learnrate
         self.gamma = gamma
         self.TDupdate = TDupdate
-        self.vlos_weight = lweight
+        self.vlos_weight = vlos_w
+        self.elos_weight = elos_w
         self.build()
         self.reset_rnn_state()
         return None
@@ -109,14 +110,16 @@ class ActorCritic(tr.nn.Module):
         # form RL loss
         los_pi = tr.sum(delta*logpr_actions)
         los_val = tr.mean(tr.square(delta)) # MSE
-        # ent_pi = tr.mean(tr.Tensor([distr.entropy().mean() for distr in expD['pi']])) # mean over time
+        ent_pi = tr.mean(
+            tr.Tensor([distr.entropy().mean() for distr in expD['distr']])
+            ) # mean over time
         # update step
         self.optiop.zero_grad()
-        los = (self.vlos_weight*los_val)-los_pi
+        los = (self.vlos_weight*los_val)-los_pi+(self.elos_weight*ent_pi)
         los.backward()
         self.optiop.step()
         # return obj
-        update_data = {'vlos':los_val,'plos':los_pi}
+        update_data = {'vlos':los_val,'plos':los_pi,'eloss':ent_pi}
         return update_data
 
 
