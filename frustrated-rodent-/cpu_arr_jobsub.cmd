@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
-#SBATCH -t 5:59:00   # runs for 48 hours (max)  
+#SBATCH -t 0:59:00   # runs for 48 hours (max)  
 #SBATCH -N 1         # node count 
 #SBATCH -c 11         # number of cores 
 #SBATCH -o ./slurms/output.%j.%a.out
 
+## call format for array
+# sbatch --array=0-2000 cpu_arr_jobsub.cmd
 
 module load pyger/0.9
 conda init bash
