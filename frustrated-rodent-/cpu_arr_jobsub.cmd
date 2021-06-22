@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-#SBATCH -t 0:59:00   # runs for 48 hours (max)  
+#SBATCH -t 4:59:00   # runs for 48 hours (max)  
 #SBATCH -N 1         # node count 
-#SBATCH -c 11         # number of cores 
+#SBATCH -c 4         # number of cores 
 #SBATCH -o ./slurms/output.%j.%a.out
 
 ## call format for array

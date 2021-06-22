@@ -24,7 +24,7 @@ elos = float(p4) # 0
 
 
 # parameter dict setup
-nseeds = 3
+nseeds = mp.cpu_count()-1 
 ## setup
 args = {
   'train':{
@@ -44,8 +44,10 @@ args = {
   }
 }
 mtag = "-".join(["-".join(["%s_%s"%(i,j) for i,j in v.items()]) for k,v in args.items()])
-mtag += "-tstamp_%s"%tstamp
+mtag += "%iseeds-tstamp_%s"%(nseeds,tstamp)
 print('model tag =',mtag)
+
+## exp instance
 
 def seed_exp(seed,args):
     """ loss [(value, policy),neps] """
@@ -79,7 +81,7 @@ def seed_exp(seed,args):
     }
     return data
 
-# run multiseed exp
+## run multiseed exp
 dataL = exp_mp(seed_exp,nseeds=nseeds,gsvar=args)
 # unpack data
 loss = np.array([d['loss'] for d in dataL])
