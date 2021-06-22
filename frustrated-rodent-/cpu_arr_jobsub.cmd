@@ -13,15 +13,15 @@ conda init bash
 conda activate rl
 
 # get arr idx
-# slurm_arr_idx=${SLURM_ARRAY_TASK_ID}
+slurm_arr_idx=${SLURM_ARRAY_TASK_ID}
 
 # use arr idx to get params
-# param_str=`python get_param_jobsub.py ${slurm_arr_idx}`
-# echo ${param_str}
+param_str=`python get_param_jobsub.py ${slurm_arr_idx}`
+echo ${param_str}
 
 # submit job
-# srun python exp.py "${param_str}"
-srun python temp.py 
+srun python exp.py "${param_str}"
+# srun python temp.py 
 
 # slurm diagnostics
 sacct --format="CPUTime,MaxRSS"

@@ -28,7 +28,7 @@ nseeds = mp.cpu_count()-1
 ## setup
 args = {
   'train':{
-    'neps':200000
+    'neps':2000
   },
   'agent':{
     'gamma':1.0,
