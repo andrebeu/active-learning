@@ -8,6 +8,7 @@
 ## call format for array
 # sbatch --array=0-2000 cpu_arr_jobsub.cmd
 
+# module load anaconda3/4.4.0
 module load pyger/0.9
 conda init bash
 conda activate rl
